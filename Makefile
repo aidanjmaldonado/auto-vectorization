@@ -1,5 +1,10 @@
 CC = gcc
-FFLAGS = -g -o2 -lm
+PAPI_INC = /opt/ohpc/pub/libs/papi/6.0.0/include
+PAPI_LIB = /opt/ohpc/pub/libs/papi/6.0.0/lib
+
+CFLAGS  = -g -O2 -I$(PAPI_INC)
+LDFLAGS = -L$(PAPI_LIB)
+LDLIBS  = -lpapi -lm
 
 TARGETS = avector
 
@@ -7,7 +12,7 @@ TARGETS = avector
 all: $(TARGETS)
 
 avector: avector.c
-	$(CC) $(FFLAGS) $< -o $@
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(LDLIBS)
 
 clean:
 	-rm -f *.o $(TARGETS) *.err *.out

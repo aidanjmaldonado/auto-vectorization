@@ -1,50 +1,94 @@
 // Libraries
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-
-// Type declarations
-double foo(double * restrict x, double * restrict y, unsigned n);
+#include <papi.h>
+#include <papiStdEventDefs.h>
+#include <time.h>
 
 int main(void) {
 
-    // Domain
-    unsigned h = 100;
+    // Time step
+    double h = 1e-4;
+    double area = 0;
 
-    // Initialize domain and range arrays
-    double * restrict x = (double *)calloc(h, sizeof(double));
-    double * restrict y = (double *)calloc(h, sizeof(double));
+    // Bounds
+    unsigned a = 0;
+    unsigned b = 10;
 
-    // x filled with values from 0 to 2π
-    for (unsigned i = 0; i < h; i++) {
-        x[i] = (2.0 * M_PI * i) / h;
+    // Iterations
+    unsigned n = (b - a) / h;
+
+    // Initialize domain array
+    double * restrict x = (double *)calloc(n, sizeof(double));
+    for (unsigned i = 0; i < n; i++) {
+        x[i] = h * i;
     }
 
-    // Iterate
-    foo(x, y, h);
+    // Walltime struct
+    struct timespec start, end;
 
-    for (unsigned i = 0; i < h; i++) {
-        printf("y[%u] = %f\n", i, y[i]);
+    // Start timer
+    int EventSet = PAPI_NULL;
+    long long values[2];
+
+    // Debugging PAPI
+    if (PAPI_library_init(PAPI_VER_CURRENT) != PAPI_VER_CURRENT) {
+        fprintf(stderr, "PAPI initialization error!\n");
+        return 1;
     }
+
+    if (PAPI_create_eventset(&EventSet) != PAPI_OK) {
+        fprintf(stderr, "PAPI create eventset error!\n");
+        return 1;
+    }
+
+    if (PAPI_add_event(EventSet, PAPI_TOT_INS) != PAPI_OK) {
+        fprintf(stderr, "PAPI add event (TOT_INS) error!\n");
+        return 1;
+    }
+
+    if (PAPI_add_event(EventSet, PAPI_FP_INS) != PAPI_OK) {
+        fprintf(stderr, "PAPI add event (FP_INS) error!\n");
+        return 1;
+    }
+
+    if (PAPI_start(EventSet) != PAPI_OK) {
+        fprintf(stderr, "PAPI start error!\n");
+        return 1;
+    }
+
+    // Get start walltime
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
+    // Trapezoidal rule to calculate are of f(x) = 2 * (sin(4x) * cos(2x) over [a, b]
+    for (unsigned i = 1; i < n - 1; i++) {
+        area += 2 * (sin(4 * x[i]) * cos(2 * x[i]));
+    }
+
+    // End walltime
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    double elapsed_ms = (end.tv_sec - start.tv_sec) * 1000.0 + (end.tv_nsec - start.tv_nsec) / 1.0e6;
+    printf("Elapsed Time: %.3f ms\n", elapsed_ms);
+
+    // Stop and read counters
+    if (PAPI_stop(EventSet, values) != PAPI_OK) {
+        fprintf(stderr, "PAPI stop error!\n");
+        return 1;
+    }
+    printf("Total Instructions: %lld\n", values[0]);
+    printf("Floating Point Instructions: %lld\n", values[1]);
+
+    area += 0.5 * 2 * (sin(4 * x[0]) * cos(2 * x[0]) + sin(4 * x[n - 1]) * cos(2 * x[n - 1]));
+    area *= h;
+
+    // Report area
+    printf("Area of f(x) = 2 * (sin(4x) * cos(2x)) over [a, b]: %f\n", area);
     
     // Free memory
     free(x);
-    free(y);
 
     return 0;
-}
-
-/*
-Example function that invokes math operation within a loop
-parameters:
-    - double * restrict :: x - array of x values over domain
-    - double * restrict :: y - empty array of the function sin(x) evaluated
-    - unsigned :: n - upper bound of the domain [0, n]
-*/
-double foo(double * restrict x, double * restrict y, unsigned n) {
-            
-    // Calculate y(x) = sin(x) over the domain [0, n]
-    for(unsigned i = 0; i < n; i++) {
-        y[i] = sin(x[i]);
-    }
 }
