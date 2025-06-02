@@ -1,5 +1,5 @@
-CC = clang
-FFLAGS = -g
+CC = gcc
+FFLAGS = -g -o2 -lm
 
 TARGETS = avector
 
